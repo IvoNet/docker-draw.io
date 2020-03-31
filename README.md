@@ -18,5 +18,5 @@ docker build -t ivonet/draw.io .
 
 The docker scripts I have here are adaptations based on [fjudith/docker-draw.io](https://github.com/fjudith/docker-draw.io)
 
-I only tried to "improved" on it by making it a multi-stage build and eliminating some layers
+I only tried to "improve" on it by making it a multi-stage build and eliminating some layers
 my image is about 285Mb compared to the 677Mb of fjudith. Other than that fjudith deserves all the credit.
