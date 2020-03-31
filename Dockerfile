@@ -1,25 +1,43 @@
-FROM ubuntu:18.04
+FROM ivonet/openjdk-alpine:8u242 as builder
 
-LABEL maintainer="IvoNet - @ivonet"
+RUN apk add apache-ant git patch xmlstarlet certbot curl \
+ && git clone --depth=1 https://github.com/jgraph/drawio.git \
+ && cd /drawio/etc/build \
+ && ant war \
+ && mkdir /draw \
+ && unzip /drawio/build/draw.war -d /draw
 
-RUN apt-get update && \
-    apt-get -y install apache2 git &&\
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+COPY PreConfig.js PostConfig.js /draw/js/
 
-RUN cd /opt && \
-    git clone --depth=1 https://github.com/jonberenguer/draw.io.git && \
-    rm -rf /var/www/html && \
-    ln -s /opt/draw.io/war/ /var/www/html
+FROM tomcat:9-jre8-alpine
 
-ENV APACHE_RUN_USER www-data
-ENV APACHE_RUN_GROUP www-data
-ENV APACHE_LOG_DIR /var/log/apache2
+LABEL maintainer="Ivo Wolring - @ivonet"
 
-RUN /usr/sbin/a2ensite default-ssl
-RUN /usr/sbin/a2enmod ssl
+RUN apk add xmlstarlet certbot curl \
+ && mkdir -p $CATALINA_HOME/webapps/draw
 
-EXPOSE 80
-EXPOSE 443
+COPY --from=builder /draw $CATALINA_HOME/webapps/draw/
 
-CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
+# Update server.xml to set Draw.io webapp to root
+RUN cd $CATALINA_HOME && \
+    xmlstarlet ed \
+    -P -S -L \
+    -i '/Server/Service/Engine/Host/Valve' -t 'elem' -n 'Context' \
+    -i '/Server/Service/Engine/Host/Context' -t 'attr' -n 'path' -v '/' \
+    -i '/Server/Service/Engine/Host/Context[@path="/"]' -t 'attr' -n 'docBase' -v 'draw' \
+    -s '/Server/Service/Engine/Host/Context[@path="/"]' -t 'elem' -n 'WatchedResource' -v 'WEB-INF/web.xml' \
+    -i '/Server/Service/Engine/Host/Valve' -t 'elem' -n 'Context' \
+    -i '/Server/Service/Engine/Host/Context[not(@path="/")]' -t 'attr' -n 'path' -v '/ROOT' \
+    -s '/Server/Service/Engine/Host/Context[@path="/ROOT"]' -t 'attr' -n 'docBase' -v 'ROOT' \
+    -s '/Server/Service/Engine/Host/Context[@path="/ROOT"]' -t 'elem' -n 'WatchedResource' -v 'WEB-INF/web.xml' \
+    conf/server.xml
+
+COPY docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
+
+WORKDIR $CATALINA_HOME
+
+EXPOSE 8080 8443
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["catalina.sh", "run"]
