@@ -1,7 +1,11 @@
 FROM ivonet/openjdk-alpine:8u242 as builder
 
+ENV DRAWIO_VERSION "v18.0.0"
+
 RUN apk add apache-ant git patch xmlstarlet certbot curl \
  && git clone --depth=1 https://github.com/jgraph/drawio.git \
+ && cd /drawio \
+ && git checkout ${DRAWIO_VERSION} \
  && cd /drawio/etc/build \
  && ant war \
  && mkdir /draw \
